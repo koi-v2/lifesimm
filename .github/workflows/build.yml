@@ -34,7 +34,18 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
+
+      - name: Setup Android SDK & Accept Licenses
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          validate-wrappers: false
 
       - name: Prepare Environment (.env)
         run: |
@@ -48,8 +59,9 @@ jobs:
         run: |
           if [ -f "debug.keystore.base64" ]; then
             echo "Restoring debug.keystore from debug.keystore.base64..."
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f "debug.keystore" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore || base64 --decode debug.keystore.base64 > debug.keystore
+          fi
+          if [ ! -f "debug.keystore" ]; then
             echo "Generating fallback debug.keystore..."
             keytool -genkeypair -v \
               -keystore debug.keystore \
@@ -63,35 +75,47 @@ jobs:
           fi
 
       - name: Make Gradle Wrapper Executable
-        run: chmod +x gradlew
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        run: |
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
+          fi
 
       - name: Build Debug APK
-        if: "${{ github.event.inputs.build_type != 'release' }}"
-        run: ./gradlew assembleDebug --stacktrace
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type != 'release' }}
+        run: |
+          if [ -f "./gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            ./gradlew assembleDebug --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
 
       - name: Build Release APK
-        if: "${{ github.event.inputs.build_type == 'release' }}"
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'release' }}
         env:
           KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: |
+          if [ -f "./gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            ./gradlew assembleRelease --stacktrace
+          else
+            gradle assembleRelease --stacktrace
+          fi
 
       - name: Upload Debug APK Artifact
-        if: "${{ github.event.inputs.build_type != 'release' }}"
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: PixelLifeSim-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
           retention-days: 14
 
       - name: Upload Release APK Artifact
-        if: "${{ github.event.inputs.build_type == 'release' }}"
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: PixelLifeSim-Release-APK
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
           retention-days: 14
