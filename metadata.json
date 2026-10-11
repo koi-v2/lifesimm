@@ -1,0 +1,6 @@
+{
+  "name": "Pixel Life",
+  "description": "Game simulasi kehidupan retro pixel: bangun karier impian, jalin asmara dan menikah, interaksi NPC, ekonomi dinamis, cuaca harian, dan kesehatan mental.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
